@@ -1,7 +1,11 @@
 {
-  "note": "这里只放「行业词库文件名」。新增一个行业：把文件放进 keywords/，再把文件名加到 files 里。日常开关改各文件自己的 enabled 字段（true/false）。",
-  "files": [
-    "ai.json"
+  "note": "这里汇总所有行业词库，并控制哪些生效（enabled）。行业文件本身只放词汇，不放开关。新增行业：放文件进 keywords/，再在 industries 里加一条。",
+  "industries": [
+    {
+      "file": "ai.json",
+      "name": "AI 产业链",
+      "enabled": true
+    }
   ],
   "updated_at": "2026-09-28",
   "consumer_url": "https://cdn.jsdelivr.net/gh/liuchao88/a-share-keywords@main/keywords/"

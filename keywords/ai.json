@@ -4,7 +4,6 @@
   "description": "AI产业链投资情报关键词库，供新闻粗筛、实体识别、产业链映射和后续AI研判使用。",
   "language": "zh-CN",
   "updated_at": "2026-09-28",
-  "enabled": true,
   "matching": {
     "case_insensitive": true,
     "normalize_full_width": true,

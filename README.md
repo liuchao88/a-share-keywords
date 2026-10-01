@@ -4,14 +4,14 @@
 所有抓取/监控项目都从这里读词库 —— 词库只有这一份真源，不再往各个项目里拷副本。
 
 现在只有 **AI 产业链**一个行业词库（`keywords/ai.json`，18 个分类、767 个词）。
-将来加行业（机器人、医药、军工…）：放一个新文件进 `keywords/`，再把文件名加到 `keywords/index.json` 的 `files` 里即可。
+将来加行业（机器人、医药、军工…）：放一个新文件进 `keywords/`，再在 `keywords/index.json` 的 `industries` 里加一条即可。
 
 ## 一、数据结构
 
 ```
 keywords/
-  index.json      ← 列出所有行业词库文件名（加新行业时才改它）
-  ai.json         ← AI 产业链词库（含分类、signal_weights 权重、changelog/heat/weekly_note）
+  index.json      ← 汇总处：列出所有行业词库 + 每个行业的 enabled 开关（只改这里）
+  ai.json         ← AI 产业链词库（只放词汇：categories / signal_weights / changelog…）
 scripts/
   update_keywords.py   ← 每周自动补词（自带抓取，不依赖别的仓库）
   qa_source.py         ← 取语料用的小抓取库（互动易 + 上证e互动）
@@ -20,23 +20,29 @@ scripts/
   purge-jsdelivr.yml   ← keywords/ 一有改动就刷新 CDN 缓存
 ```
 
-`keywords/index.json`：
+`keywords/index.json`（**汇总 + 开关都在这里**）：
 ```json
-{ "files": ["ai.json"] }
+{
+  "industries": [
+    { "file": "ai.json", "name": "AI 产业链", "enabled": true }
+  ]
+}
 ```
+- `file` = 文件名（行业文件放在同一个 `keywords/` 目录下）
+- `name` = 给人看的行业名，只会出现在日志里
+- `enabled` = **这个行业是否生效**：`false` → 消费方跳过它（文件不删、词不丢，随时再打开）
+- 加一个行业：把文件放进 `keywords/`，再在 `industries` 里加一条
 
-行业文件里有两个开关/元数据要认识：
-- `"enabled": true` —— **这个行业词库是否生效**。改成 `false`，消费方就会跳过它（不删文件、不丢词，随时可以再打开）
-- `"updated_at"` / `"changelog"` / `"heat"` / `"weekly_note"` —— 每周任务自己维护，别手改
+行业文件本身**只放词汇**，没有开关；其中的 `updated_at` / `changelog` / `heat` / `weekly_note` 由每周任务维护，别手改。
 
 `signal_weights` 分四档（critical / high / medium / low），消费方按权重排序决定标题里挂哪些命中词。
 
 ## 二、消费方怎么读（约定）
 
-按这个顺序读，读到哪份算哪份（国内一律走 jsdelivr，别用 raw）：
+按这个顺序读（国内一律走 jsdelivr，别用 raw）：
 
-1. `https://cdn.jsdelivr.net/gh/liuchao88/a-share-keywords@main/keywords/index.json` → 拿到文件名列表
-2. 逐个读 `.../keywords/<文件名>`，**跳过 `enabled: false` 的**
+1. `https://cdn.jsdelivr.net/gh/liuchao88/a-share-keywords@main/keywords/index.json` → 拿到 `industries` 清单
+2. 逐个读 `.../keywords/<file>`，**跳过 `enabled: false` 的**
 3. 把各文件的 `categories[].keywords` + `categories[].subcategories[].keywords` + `entities` 合并成词表，
    `signal_weights` 合并成权重表（同名冲突时后面的文件覆盖前面的）
 
@@ -62,20 +68,21 @@ scripts/
 5. **四道闸门**：只加不删；分类必须已存在；新词必须原样出现在本次语料里（防编造）；每次 ≤20 个、总量 ≤1200
 6. 结果写回 `keywords/ai.json`（`updated_at` / `changelog` / `heat` / `weekly_note`），并推一条周报到企微群
 
-任何一步失败（没配 key、抓取失败、模型超时、返回乱码）→ **一律不动文件、退出码 0**，不让仓库变红。
+任何一步失败（抓取失败、模型超时、返回乱码）→ **一律不动文件、退出码 0**，不让仓库变红。
+例外：**没配 `DEEPSEEK_API_KEY` 会故意退出码 1**（配置缺失不是偶发失败，要让你看见，而不是静默不再补词）。
 
 需要的 Secrets（仓库 Settings → Secrets and variables → Actions）：
 
 | Secret | 必填 | 说明 |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | 是 | 不配就整段跳过（不动文件） |
+| `DEEPSEEK_API_KEY` | 是 | 不配 → 任务报红（不会静默跳过） |
 | `WECOM_WEBHOOK_URL` | 否 | 配了才把周报推到企微群 |
 
 ## 四、常用操作
 
-- **开关某个行业**：改那个文件的 `"enabled"`（true/false）→ 提交后 `purge-jsdelivr` 会自动刷 CDN
-- **加一个行业**：新建 `keywords/<行业>.json`（照 `ai.json` 的结构，至少要 `name` / `enabled` / `categories`），
-  再把文件名加进 `keywords/index.json` 的 `files`
+- **开关某个行业**：改 `keywords/index.json` 里那条的 `"enabled"`（true/false）→ 提交后 `purge-jsdelivr` 自动刷 CDN
+- **加一个行业**：新建 `keywords/<行业>.json`（照 `ai.json` 的结构：`name` / `categories` / `signal_weights`），
+  再在 `keywords/index.json` 的 `industries` 里加一条 `{"file": "...", "name": "...", "enabled": true}`
 - **手动加/删词**：直接改 `keywords/ai.json` 里的 `categories[].keywords`
 - **立刻补一次词**：Actions → update-keywords → Run workflow
 - **本地试跑**（只看模型想加什么、不写文件）：

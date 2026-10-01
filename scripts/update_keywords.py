@@ -13,12 +13,11 @@ a-share-keywords 每周自动补词（每周一 10:00 北京时间，由 .github
   6. 没有任何新增 → 不写文件（不产生空提交）
 
 行业文件与开关
-  - keywords/index.json 的 files 列出所有行业词库文件名（加新行业时才改它）
-  - 每个行业文件自己的 "enabled": true/false 是日常开关：false = 这个行业不生效（消费方会跳过它）
-    · 注意：开关只影响"是否被消费方采用"，不影响本脚本继续往里补词（关掉只是暂时不用，词库还在维护）
-  - 本脚本补词的目标文件是 TARGET_FILE（目前只有 AI 行业：keywords/ai.json）；
-    以后要自动维护别的行业，把它的文件名加进 TARGET_FILE 即可（同一个补词流程会分别处理）
-  - 选语料时用"所有 enabled 文件合并后的词表"，不是只用目标文件的词
+  - keywords/index.json 是**汇总处**：industries 里列出所有行业文件，每条带 enabled 开关 —— 开关只在这里改
+  - 行业文件本身**只放词汇**（categories / signal_weights / entities / changelog 等），不再有 enabled 字段
+  - 关掉某个行业（enabled=false）只影响"消费方是否采用"；本脚本仍会继续维护它的词库（避免打开时是旧的）
+  - 本脚本补词的目标文件是 TARGET_FILE（目前只有 AI 行业：keywords/ai.json）
+  - 选语料时用"所有 enabled 行业合并后的词表"，不是只用目标文件的词
 
 刻意的边界
   - 只加词，绝不删词、改词、改分类：删改要人看。模型只能在既有分类下追加。
@@ -331,19 +330,21 @@ def http_get(url, timeout=25):
 
 
 def load_enabled_words():
-    """读 keywords/index.json → 逐个行业文件，合并所有 enabled 文件的词表（与消费方同一套规则）"""
+    """读 keywords/index.json 的 industries 清单 → 合并所有 enabled=true 行业文件的词表（与消费方同一套规则）"""
     idx = json.load(open(INDEX_PATH, encoding="utf-8"))
     words, files = [], []
-    for name in idx.get("files") or []:
+    for ent in idx.get("industries") or []:
+        name = ent.get("file")
+        if not name:
+            continue
         p = os.path.join(KW_DIR, name)
         if not os.path.exists(p):
             log(f"  index.json 里列的 {name} 不存在，跳过")
             continue
-        d = json.load(open(p, encoding="utf-8"))
-        if not d.get("enabled", True):
-            log(f"  {name}：enabled=false，不生效（跳过）")
+        if not ent.get("enabled", True):
+            log(f"  {name}（{ent.get('name') or ''}）：enabled=false，不生效（跳过）")
             continue
-        words += sorted(flat_keywords(d))
+        words += sorted(flat_keywords(json.load(open(p, encoding="utf-8"))))
         files.append(name)
     log("生效词库：%s（合并 %d 个词）" % ("、".join(files) or "无", len(set(words))))
     return sorted(set(words))
@@ -361,8 +362,8 @@ def main():
     log(f"目标词库 {os.path.basename(TARGET_FILE)}：{len(known)} 个词，{len(ids)} 个分类")
 
     if not DEEPSEEK_API_KEY:
-        log("未配置 DEEPSEEK_API_KEY，跳过（不动文件）")
-        return 0
+        log("未配置 DEEPSEEK_API_KEY —— 这是配置缺失（不是偶发失败），故意用退出码 1 结束，好让 Action 变红、你能收到提醒")
+        return 1
     if len(known) >= MAX_TOTAL:
         log(f"词库已有 {len(known)} 个词，达到上限 {MAX_TOTAL}，这次不再加（不动文件）")
         return 0
