@@ -1,0 +1,24 @@
+name: purge-jsdelivr
+
+# 任何人（包括你在 GitHub 网页上）改了 keywords/ 下的文件，就把 jsdelivr 的缓存刷掉。
+# 不刷的话，分支文件默认缓存 12 小时，消费方（两个抓取仓库）可能半天读到的还是旧词库。
+
+on:
+  push:
+    paths:
+      - 'keywords/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 刷新 keywords 下所有 json 的 CDN 缓存
+        run: |
+          for f in keywords/*.json; do
+            echo "purge $f"
+            curl -s "https://purge.jsdelivr.net/gh/liuchao88/a-share-keywords@main/$f" > /dev/null || true
+          done
